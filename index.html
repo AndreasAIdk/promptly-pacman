@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Promptly Pac-Man — spis prikker, undgå spøgelser</title>
+<meta name="description" content="Klassisk Pac-Man i Promptly-farver. Power-pellets, kæde-bonus, 4 niveauer, highscore-liste og Amiga-musik. Spil direkte i browseren.">
+
+<!-- OpenGraph (LinkedIn, Facebook, Slack) -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Promptly Pac-Man">
+<meta property="og:description" content="Spis prikker. Undgå spøgelser. Klassisk arkade-spil i 8-bit Amiga-look — direkte i browseren.">
+<meta property="og:url" content="https://promptly-pacman.surge.sh/">
+<meta property="og:image" content="https://promptly-pacman.surge.sh/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="Promptly">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Promptly Pac-Man">
+<meta name="twitter:description" content="Spis prikker. Undgå spøgelser. Klassisk arkade-spil i 8-bit Amiga-look — direkte i browseren.">
+<meta name="twitter:image" content="https://promptly-pacman.surge.sh/og-image.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #00FF84;
+    --green-dim: #00b85f;
+    --cyan: #5AD0FF;
+    --cyan-dim: rgba(90, 208, 255, 0.45);
+    --cyan-faint: rgba(90, 208, 255, 0.08);
+    --black: #000;
+    --creme: #E8E0D4;
+    --light: #F4F4F4;
+    --grey: #706F6F;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: var(--black);
+    color: var(--cyan);
+    overflow: hidden;
+    height: 100%;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Roboto Mono', Menlo, 'Courier New', monospace;
+    overscroll-behavior: none;
+  }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
+
+  .stage {
+    position: fixed; inset: 0;
+    display: grid; place-items: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* Rotate-prompt for phones held in portrait. */
+  .rotate-prompt {
+    display: none;
+    position: fixed; inset: 0;
+    background: var(--black);
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 1000;
+    color: var(--cyan);
+    text-align: center;
+    padding: 32px;
+    gap: 18px;
+  }
+  .rotate-prompt .rotate-icon {
+    width: 90px; height: 130px;
+    border: 4px solid var(--cyan);
+    border-radius: 12px;
+    position: relative;
+    animation: rotateBounce 1.8s ease-in-out infinite;
+  }
+  .rotate-prompt .rotate-icon::before {
+    content: ''; position: absolute;
+    left: 50%; bottom: 6px;
+    transform: translateX(-50%);
+    width: 22px; height: 4px;
+    background: var(--cyan); border-radius: 2px;
+  }
+  @keyframes rotateBounce {
+    0%, 100% { transform: rotate(0deg); }
+    50%      { transform: rotate(90deg); }
+  }
+  .rotate-prompt h2 {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 18px; font-weight: 400; color: var(--green);
+    margin-top: 8px; letter-spacing: 0.06em;
+  }
+  .rotate-prompt p {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 11px; color: var(--creme); opacity: 0.8;
+    line-height: 1.6; max-width: 320px;
+  }
+  /* Show only on portrait touch devices (don't trigger on desktop window resize). */
+  @media (orientation: portrait) and (max-width: 900px) {
+    .rotate-prompt { display: flex; }
+    .stage { display: none; }
+  }
+
+  /* Mobile landscape: ditch the side panel + bottom bar. The maze fills the
+     viewport, and a small floating HUD shows score / lives / pause. The fixed
+     1280×720 layout doesn't fit a phone in landscape, so we override it. */
+  .mobile-hud { display: none; }
+  @media (orientation: landscape) and (max-height: 500px) {
+    body { overflow: hidden; }
+    .stage { padding: 0; display: block; }
+    .container {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100dvh;
+      display: block;
+      padding: 0; gap: 0;
+      transform: none !important;
+    }
+    .panel, .bottom { display: none !important; }
+    .maze-area {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100dvh;
+      border: none; border-radius: 0;
+      padding-top: 30px;
+      box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* Canvas dimensions are set inline by JS (fitScale) for reliable mobile sizing. */
+    canvas { display: block; }
+    .mobile-hud {
+      display: flex;
+      position: fixed; top: 6px; left: 8px; right: 8px;
+      z-index: 50;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-size: 9px;
+      color: var(--cyan);
+      text-shadow: 1px 1px 0 #000, 0 0 6px #000;
+    }
+    .mobile-hud .group { display: flex; gap: 10px; align-items: center; }
+    .mobile-hud .hud-lives { display: flex; gap: 3px; }
+    .mobile-hud .hud-lives img { height: 14px; filter: drop-shadow(0 0 3px rgba(0,255,132,0.7)); }
+    .mobile-hud .hud-pause {
+      pointer-events: auto;
+      background: rgba(0,0,0,0.7);
+      color: var(--green);
+      border: 2px solid var(--green);
+      border-radius: 0;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 9px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+  }
+  .container {
+    width: 1280px;
+    height: 720px;
+    display: grid;
+    grid-template-columns: 920px 1fr;
+    grid-template-rows: 600px 1fr;
+    gap: 18px;
+    padding: 14px;
+    transform-origin: center;
+    background: var(--black);
+  }
+
+  .maze-area {
+    grid-column: 1;
+    grid-row: 1;
+    border: 1px solid var(--cyan-dim);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--black);
+  }
+  canvas { display: block; }
+
+  .panel {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+  }
+  .logo {
+    margin-bottom: 6px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+    user-select: none;
+    align-self: flex-start;
+  }
+  .logo img {
+    height: 42px;
+    width: auto;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* Invert dark navy → light, hue-rotate restores the green dot */
+    filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(0, 255, 132, 0.25));
+  }
+
+  .card {
+    border: 1px solid var(--cyan-dim);
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: var(--cyan-faint);
+  }
+  .card-label {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    opacity: 0.95;
+    line-height: 1.3;
+  }
+  .card-sub {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 8px;
+    letter-spacing: 0.04em;
+    color: var(--cyan);
+    opacity: 0.55;
+    margin-top: 4px;
+  }
+  .card-value {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: var(--cyan);
+    letter-spacing: 0.04em;
+    margin-top: 8px;
+    line-height: 1.05;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+  .lives { display: flex; gap: 8px; margin-top: 6px; min-height: 26px; align-items: center; }
+  .life {
+    height: 22px;
+    width: auto;
+    display: block;
+    filter: drop-shadow(0 0 5px rgba(0, 255, 132, 0.55));
+    image-rendering: pixelated;
+  }
+
+  .combo-display {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--green);
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    margin-top: 8px;
+    line-height: 1.05;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 255, 132, 0.4);
+  }
+  .combo-display.idle { color: var(--cyan); opacity: 0.45; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4); }
+  .combo-sub {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 7px;
+    color: var(--cyan);
+    opacity: 0.55;
+    letter-spacing: 0.04em;
+    margin-top: 5px;
+  }
+
+  .alarm { display: flex; align-items: center; gap: 9px; margin-top: 6px; }
+  .alarm-icon { width: 24px; height: 24px; flex-shrink: 0; }
+  .alarm-icon path { fill: var(--cyan); }
+  .alarm-bar {
+    flex: 1;
+    height: 22px;
+    background: rgba(90, 208, 255, 0.08);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    padding: 2px;
+    gap: 2px;
+  }
+  .alarm-segs { display: flex; gap: 2px; width: 100%; height: 100%; }
+  .alarm-seg { flex: 1; background: rgba(90, 208, 255, 0.18); }
+  .alarm-status {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    opacity: 0.7;
+    margin-top: 8px;
+    font-weight: 400;
+    text-align: center;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  }
+
+  .sound-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 6px;
+  }
+  .by { font-size: 10px; opacity: 0.45; letter-spacing: 0.12em; color: var(--cyan); }
+  .iconbtn {
+    background: transparent;
+    color: var(--cyan);
+    border: 1px solid var(--cyan-dim);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font: inherit;
+    user-select: none;
+    line-height: 1;
+    font-size: 16px;
+  }
+  .iconbtn:hover { color: var(--green); border-color: var(--green); }
+  .iconbtn.off { opacity: 0.4; }
+
+  .bottom {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    border-top: 1px solid var(--cyan-faint);
+    gap: 24px;
+  }
+  .legend-group { display: flex; gap: 36px; align-items: center; }
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    opacity: 0.9;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(0, 255, 132, 0.7);
+  }
+  .legend-ghost { width: 18px; height: 18px; }
+  .legend-ghost path { fill: var(--light); }
+
+  .ready-btn {
+    background: transparent;
+    color: var(--green);
+    border: 2px solid var(--green);
+    border-radius: 0;
+    padding: 10px 22px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-transform: uppercase;
+    box-shadow: 3px 3px 0 var(--black), 3px 3px 0 1px rgba(0, 255, 132, 0.4);
+    transition: transform 0.06s, box-shadow 0.06s;
+  }
+  .ready-btn:hover { background: rgba(0, 255, 132, 0.1); }
+  .ready-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--black);
+  }
+  .ready-btn.playing { color: var(--cyan); border-color: var(--cyan-dim); box-shadow: 3px 3px 0 var(--black); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.94);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    text-align: center;
+    padding: 24px;
+    gap: 10px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .overlay .brand {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 20px;
+    line-height: 1;
+  }
+  .overlay .brand img {
+    height: 64px;
+    width: auto;
+    display: block;
+    image-rendering: pixelated;
+    filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 10px rgba(0, 255, 132, 0.3));
+  }
+  .overlay h1 {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: clamp(22px, 4.5vw, 34px);
+    color: var(--green);
+    letter-spacing: 0.04em;
+    font-weight: 400;
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.6), 0 0 18px rgba(0, 255, 132, 0.5);
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+  .overlay p {
+    color: var(--creme);
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 13px;
+    max-width: 440px;
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+  }
+  .overlay .hint {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    color: var(--grey);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+  .overlay button {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    margin-top: 20px;
+    background: var(--green);
+    color: var(--black);
+    border: 3px solid var(--black);
+    border-radius: 0;
+    padding: 14px 28px;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    text-transform: uppercase;
+    box-shadow: 4px 4px 0 var(--black), 4px 4px 0 1px var(--green-dim);
+    transition: transform 0.06s, box-shadow 0.06s;
+  }
+  .overlay button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 var(--black), 2px 2px 0 1px var(--green-dim);
+  }
+  .btn-row { display: flex; gap: 14px; align-items: center; margin-top: 16px; flex-wrap: wrap; justify-content: center; }
+  .btn-row button { margin-top: 0; }
+  .overlay button.btn-secondary {
+    background: transparent;
+    color: var(--cyan);
+    border-color: var(--cyan);
+    box-shadow: 4px 4px 0 var(--black), 4px 4px 0 1px rgba(90, 208, 255, 0.4);
+  }
+  .overlay button.btn-secondary:active {
+    box-shadow: 2px 2px 0 var(--black), 2px 2px 0 1px rgba(90, 208, 255, 0.4);
+  }
+  .overlay button:hover { background: var(--green-dim); }
+  .hidden { display: none !important; }
+
+  /* Highscore */
+  .highscore-entry {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .hs-prompt {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    color: var(--green);
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 255, 132, 0.5);
+  }
+  .hs-input-row { display: flex; gap: 8px; align-items: center; }
+  .hs-input-row input {
+    background: var(--black);
+    border: 3px solid var(--green);
+    border-radius: 0;
+    color: var(--green);
+    font: 400 22px 'Press Start 2P', 'Courier New', monospace;
+    padding: 12px 14px;
+    width: 150px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    outline: none;
+    box-shadow: 3px 3px 0 var(--black), 3px 3px 0 1px rgba(0, 255, 132, 0.4);
+  }
+  .hs-input-row input::placeholder { color: var(--green); opacity: 0.25; }
+  .hs-input-row button {
+    margin: 0;
+    padding: 12px 22px;
+    font-size: 13px;
+  }
+
+  .highscore-list {
+    margin-top: 18px;
+    width: 100%;
+    max-width: 340px;
+  }
+  .highscore-list h2 {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    color: var(--cyan);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    text-align: center;
+    font-weight: 400;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+  }
+  .highscore-list ol { list-style: none; padding: 0; }
+  .highscore-list li {
+    display: grid;
+    grid-template-columns: 28px 1fr 100px;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 2px solid rgba(90, 208, 255, 0.18);
+    border-radius: 0;
+    margin-bottom: 5px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--creme);
+    align-items: center;
+    background: rgba(90, 208, 255, 0.03);
+  }
+  .highscore-list li.you {
+    border-color: var(--green);
+    background: rgba(0, 255, 132, 0.08);
+    color: var(--green);
+    box-shadow: 0 0 10px rgba(0, 255, 132, 0.18);
+  }
+  .highscore-list li .rank { color: var(--cyan); font-weight: 700; opacity: 0.8; }
+  .highscore-list li.you .rank { color: var(--green); opacity: 1; }
+  .highscore-list li .name { letter-spacing: 0.22em; font-weight: 700; }
+  .highscore-list li .score { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .highscore-list li.empty .name, .highscore-list li.empty .score { opacity: 0.25; }
+</style>
+</head>
+<body>
+  <div class="rotate-prompt" id="rotatePrompt">
+    <div class="rotate-icon"></div>
+    <h2>Drej telefonen</h2>
+    <p>Spillet kræver landscape-mode</p>
+  </div>
+
+  <div class="mobile-hud" id="mobileHud">
+    <div class="group">
+      <span>SCORE <span id="hudScore">000000</span></span>
+      <span class="hud-lives" id="hudLives"></span>
+    </div>
+    <div class="group">
+      <span>LVL <span id="hudLevel">01</span></span>
+      <button class="hud-pause" id="hudPauseBtn">Klar?</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="container" id="container">
+      <div class="maze-area">
+        <canvas id="game"></canvas>
+      </div>
+
+      <aside class="panel">
+        <div class="logo"><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+        <div class="card">
+          <div class="card-label">Score</div>
+          <div class="card-sub">1UP</div>
+          <div class="card-value" id="score">000000</div>
+        </div>
+        <div class="card">
+          <div class="card-label">High Score</div>
+          <div class="card-value" id="highScore">000000</div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-label">Niveau</div>
+            <div class="card-value" id="level">01</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Kæde</div>
+            <div class="combo-display idle" id="combo">×1</div>
+            <div class="combo-sub" id="comboSub">Bedst: 0</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-label">Liv</div>
+          <div class="lives" id="lives"></div>
+        </div>
+        <div class="card">
+          <div class="card-label">Spøgelsesalarm</div>
+          <div class="alarm" id="alarmEl">
+            <svg class="alarm-icon" viewBox="0 0 22 22">
+              <path d="M11 2 A8 8 0 0 1 19 10 V20 L17 18 L15 20 L13 18 L11 20 L9 18 L7 20 L5 18 L3 20 V10 A8 8 0 0 1 11 2 Z"/>
+            </svg>
+            <div class="alarm-bar"><div class="alarm-segs" id="alarmSegs"></div></div>
+          </div>
+          <div class="alarm-status" id="alarmStatus">Sikker</div>
+        </div>
+        <div class="sound-row">
+          <span class="by">© promptly</span>
+          <button class="iconbtn" id="soundBtn" aria-label="Lyd til/fra">♪</button>
+        </div>
+      </aside>
+
+      <footer class="bottom">
+        <div class="legend-group">
+          <div class="legend"><span class="legend-dot"></span>Spis prikker</div>
+          <div class="legend">
+            <svg class="legend-ghost" viewBox="0 0 22 22">
+              <path d="M11 2 A8 8 0 0 1 19 10 V20 L17 18 L15 20 L13 18 L11 20 L9 18 L7 20 L5 18 L3 20 V10 A8 8 0 0 1 11 2 Z"/>
+            </svg>
+            Undgå spøgelser
+          </div>
+        </div>
+        <button class="ready-btn" id="readyBtn">Klar?</button>
+      </footer>
+    </div>
+  </div>
+
+  <div class="overlay" id="startOverlay">
+    <div class="brand"><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+    <p>Spis alle prikker. Undgå spøgelserne.</p>
+    <p class="hint">Piletaster · WASD · swipe — kæde for bonus</p>
+    <div class="btn-row">
+      <button id="continueBtn" class="hidden btn-secondary">Fortsæt</button>
+      <button id="startBtn">Nyt spil</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="endOverlay">
+    <h1 id="endTitle">Game Over</h1>
+    <p>Score: <span id="finalScore">0</span></p>
+    <p class="hint">Niveau <span id="endLevel">1</span> · Bedste kæde <span id="bestChain">0</span></p>
+
+    <div class="highscore-entry hidden" id="highscoreEntry">
+      <div class="hs-prompt">★ Ny placering på top 5</div>
+      <div class="hs-input-row">
+        <input type="text" id="initialsInput" maxlength="3" placeholder="ABC" autocomplete="off" spellcheck="false">
+        <button id="submitInitials">Gem</button>
+      </div>
+    </div>
+
+    <div class="highscore-list">
+      <h2>Top 5</h2>
+      <ol id="highscoreItems"></ol>
+    </div>
+
+    <button id="restartBtn">Spil igen</button>
+  </div>
+
+<script>
+(() => {
+  // ===== Mazes per level (25 × 15, landscape) =====
+  // # wall, . pellet, o power, - gate, G house interior, P player, (space) void
+  // Each row is exactly 25 chars.
+  const MAZES = [
+    // Level 1: very open grid — wide uniform corridors and small wall blocks.
+    [
+      "#########################",  // 0
+      "#o.....................o#",  // 1
+      "#.###.###.##.##.###.###.#",  // 2
+      "#.###.###.##.##.###.###.#",  // 3
+      "#.......................#",  // 4
+      "#.###.###.##.##.###.###.#",  // 5
+      "#.###.###.##-##.###.###.#",  // 6
+      ".........#GGGGG#.........",  // 7
+      "#.###.###.#####.###.###.#",  // 8
+      "#.###.###.##.##.###.###.#",  // 9
+      "#...........P...........#",  // 10
+      "#.###.###.##.##.###.###.#",  // 11
+      "#.###.###.##.##.###.###.#",  // 12
+      "#o.....................o#",  // 13
+      "#########################"   // 14
+    ],
+    // Level 2: varied block widths — wider chunks force longer detours, but the
+    // structure still has 1-cell corridors between blocks.
+    [
+      "#########################",  // 0
+      "#o.....................o#",  // 1
+      "#.####.###.###.###.####.#",  // 2
+      "#.####.###.###.###.####.#",  // 3
+      "#.......................#",  // 4
+      "#.##.####.##.##.####.##.#",  // 5
+      "#.##.####.##-##.####.##.#",  // 6
+      ".........#GGGGG#.........",  // 7
+      "#.##.####.#####.####.##.#",  // 8
+      "#.##.####.##.##.####.##.#",  // 9
+      "#...........P...........#",  // 10
+      "#.####.###.###.###.####.#",  // 11
+      "#.####.###.###.###.####.#",  // 12
+      "#o.....................o#",  // 13
+      "#########################"   // 14
+    ],
+    // Level 3: dense original maze.
+    [
+      "#########################",
+      "#o.....................o#",
+      "#.####.####.#.####.####.#",
+      "#.......................#",
+      "#.####.##.#####.##.####.#",
+      "#....##...........##....#",
+      "####.####.##-##.####.####",
+      ".........#GGGGG#.........",
+      "####.####.#####.####.####",
+      "#....##...........##....#",
+      "#.####.##.#####.##.####.#",
+      "#...........P...........#",
+      "#.####.####.#.####.####.#",
+      "#o.....................o#",
+      "#########################"
+    ],
+    // Level 4+: cut horizontal corridors with big wall blocks. Top and bottom
+    // halves are separated; player must use the tunnel row to cross.
+    [
+      "#########################",
+      "#o..........#..........o#",
+      "#.####.####.#.####.####.#",
+      "#.....#############.....#",
+      "#.#######.#####.#######.#",
+      "#....##...........##....#",
+      "####.####.##-##.####.####",
+      ".........#GGGGG#.........",
+      "####.####.#####.####.####",
+      "#....##...........##....#",
+      "#.#######.#####.#######.#",
+      "#.....#####.P.#####.....#",
+      "#.####.####.#.####.####.#",
+      "#o.....................o#",
+      "#########################"
+    ]
+  ];
+  function getMazeForLevel(lvl) {
+    const idx = Math.min(Math.max(0, lvl - 1), MAZES.length - 1);
+    return MAZES[idx];
+  }
+
+  const COLS = 25, ROWS = 15, CELL = 36;
+  const W = COLS * CELL, H = ROWS * CELL;
+  const HOUSE_CENTER = { x: 12, y: 7 };
+  const HOUSE_EXIT   = { x: 12, y: 5 };
+
+  const C = {
+    bg: '#000',
+    wall: '#5AD0FF',
+    gate: '#00FF84',
+    pellet: '#E8E0D4',
+    power: '#00FF84',
+    player: '#00FF84',
+    ghosts: ['#F4F4F4', '#5AD0FF', '#706F6F', '#E8E0D4'],
+    ghostFrightened: '#5AD0FF',
+    ghostFrightenedBlink: '#F4F4F4',
+    eye: '#F4F4F4',
+    pupil: '#000',
+    ready: '#00FF84',
+    levelText: '#5AD0FF'
+  };
+
+  let grid = [];
+  let pelletTotal = 0;
+  let playerStart = { x: 12, y: 11 };
+
+  function parseMaze() {
+    const MAZE_RAW = getMazeForLevel(level || 1);
+    grid = [];
+    pelletTotal = 0;
+    for (let y = 0; y < ROWS; y++) {
+      const row = MAZE_RAW[y] || '';
+      const gridRow = [];
+      for (let x = 0; x < COLS; x++) {
+        const c = row[x] || ' ';
+        let cell = 'empty';
+        if (c === '#') cell = 'wall';
+        else if (c === '.') { cell = 'pellet'; pelletTotal++; }
+        else if (c === 'o') { cell = 'power'; pelletTotal++; }
+        else if (c === '-') cell = 'gate';
+        else if (c === 'G') cell = 'house';
+        else if (c === ' ') cell = 'void';
+        else if (c === 'P') { cell = 'empty'; playerStart = { x, y }; }
+        gridRow.push(cell);
+      }
+      grid.push(gridRow);
+    }
+  }
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  canvas.width = W;
+  canvas.height = H;
+
+  // ===== Sound =====
+  let audioCtx = null;
+  let soundOn = true;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { return null; }
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, dur, type = 'square', vol = 0.06) {
+    if (!soundOn) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, ac.currentTime);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.02);
+  }
+  function sweep(f1, f2, dur, type = 'sine', vol = 0.08) {
+    if (!soundOn) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f1, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(f2, 20), ac.currentTime + dur);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + dur + 0.02);
+  }
+  let munchToggle = false;
+  function sndMunch() { tone(munchToggle ? 380 : 280, 0.05, 'square', 0.035); munchToggle = !munchToggle; }
+  function sndPower() { sweep(200, 700, 0.4, 'sawtooth', 0.07); }
+  function sndDeath() { sweep(550, 80, 1.1, 'sawtooth', 0.1); }
+  function sndGhost() { sweep(400, 900, 0.18, 'sine', 0.08); }
+  function sndGhostEat() {
+    // Bright "ping" — short sine bell with a sparkle on top.
+    tone(1318, 0.10, 'sine', 0.10);                          // E6
+    setTimeout(() => tone(1976, 0.18, 'triangle', 0.08), 40); // B6
+    setTimeout(() => tone(2637, 0.14, 'sine', 0.05), 90);    // E7 sparkle
+  }
+  function sndStart() { sweep(220, 660, 0.5, 'triangle', 0.06); }
+  function sndLevel() {
+    tone(600, 0.1, 'triangle', 0.07);
+    setTimeout(() => tone(800, 0.1, 'triangle', 0.07), 100);
+    setTimeout(() => tone(1000, 0.15, 'triangle', 0.07), 200);
+  }
+  function sndCombo() { tone(900, 0.07, 'triangle', 0.05); }
+  // Escalating arcade fanfare for each combo-multiplier tier reached.
+  // Tier 1 = ×1.5, 2 = ×2, 3 = ×2.5, 4 = ×3.
+  function sndComboTier(tier) {
+    const seqs = {
+      1: [[784, 0.08, 'triangle', 0.07], [1047, 0.14, 'triangle', 0.08]],
+      2: [[1047, 0.06, 'triangle', 0.07], [1319, 0.06, 'triangle', 0.07], [1568, 0.16, 'triangle', 0.09]],
+      3: [[1047, 0.05, 'square', 0.06], [1319, 0.05, 'square', 0.06], [1568, 0.05, 'square', 0.07], [2093, 0.18, 'triangle', 0.09]],
+      4: [[1319, 0.05, 'square', 0.06], [1568, 0.05, 'square', 0.07], [2093, 0.05, 'square', 0.08], [2637, 0.10, 'square', 0.09], [3136, 0.22, 'triangle', 0.10]]
+    };
+    const seq = seqs[tier];
+    if (!seq) return;
+    seq.forEach((args, i) => setTimeout(() => tone(...args), i * 65));
+  }
+
+  // ===== Music: per-level loop + hunter (chase) loop =====
+  // Hunter music takes priority. When power pellet expires, level music resumes.
+  let hunterAudio = null;
+  const levelAudios = {};     // { 1: Audio, 2: Audio, ... }
+  let activeLevelAudio = null;
+  let paused = false;       // game pause flag (also gates music resume)
+
+  function initHunterAudio() {
+    if (hunterAudio) return;
+    hunterAudio = new Audio('music/chase-music.mp3');
+    hunterAudio.loop = true;
+    hunterAudio.volume = 0.55;
+    hunterAudio.preload = 'none'; // only fetched on demand
+  }
+  // iOS Safari rejects audio.play() outside a user-gesture. The chase music
+  // first plays when the player walks into a power pellet, which is NOT a
+  // gesture. So we "unlock" the element by triggering a muted play() while
+  // the user is still tapping the Start / Continue button.
+  let hunterAudioPrimed = false;
+  function primeHunterAudio() {
+    if (hunterAudioPrimed) return;
+    initHunterAudio();
+    if (!hunterAudio) return;
+    hunterAudio.muted = true;
+    const p = hunterAudio.play();
+    const reset = () => {
+      try { hunterAudio.pause(); hunterAudio.currentTime = 0; } catch (e) {}
+      hunterAudio.muted = false;
+    };
+    if (p && p.then) p.then(reset).catch(() => { hunterAudio.muted = false; });
+    else setTimeout(reset, 50);
+    hunterAudioPrimed = true;
+  }
+  function initLevelAudio(lvl) {
+    if (levelAudios[lvl]) return levelAudios[lvl];
+    const a = new Audio(`music/level%20${lvl}.mp3`);
+    a.loop = true;
+    a.volume = 0.4;
+    a.preload = 'none'; // only this level's track gets loaded, on demand
+    levelAudios[lvl] = a;
+    return a;
+  }
+
+  function startHunterMusic() {
+    if (!soundOn || paused) return;
+    pauseLevelMusic();
+    initHunterAudio();
+    if (!hunterAudio) return;
+    try { hunterAudio.currentTime = 0; hunterAudio.play().catch(() => {}); }
+    catch (e) {}
+  }
+  function stopHunterMusic() {
+    if (hunterAudio) {
+      try { hunterAudio.pause(); hunterAudio.currentTime = 0; } catch (e) {}
+    }
+  }
+  function pauseHunterMusic() {
+    if (hunterAudio) try { hunterAudio.pause(); } catch (e) {}
+  }
+  function resumeHunterMusic() {
+    if (!soundOn || !hunterAudio || paused) return;
+    try { hunterAudio.play().catch(() => {}); } catch (e) {}
+  }
+
+  function startLevelMusic() {
+    if (!soundOn || !started || ended || paused) return;
+    const lvlForMusic = Math.min(level || 1, 4);
+    const audio = initLevelAudio(lvlForMusic);
+    // Pause every other level audio so they don't pile up.
+    for (const key in levelAudios) {
+      if (levelAudios[key] !== audio) {
+        try { levelAudios[key].pause(); levelAudios[key].currentTime = 0; } catch (e) {}
+      }
+    }
+    activeLevelAudio = audio;
+    if (frightenedTimer > 0) return; // hunter has priority right now
+    try { audio.play().catch(() => {}); } catch (e) {}
+  }
+  function pauseLevelMusic() {
+    if (activeLevelAudio) try { activeLevelAudio.pause(); } catch (e) {}
+  }
+  function resumeLevelMusic() {
+    if (!soundOn || !activeLevelAudio || paused) return;
+    if (frightenedTimer > 0) return;
+    try { activeLevelAudio.play().catch(() => {}); } catch (e) {}
+  }
+  function stopLevelMusic() {
+    for (const key in levelAudios) {
+      try { levelAudios[key].pause(); levelAudios[key].currentTime = 0; } catch (e) {}
+    }
+    activeLevelAudio = null;
+  }
+  function stopAllMusic() {
+    stopHunterMusic();
+    stopLevelMusic();
+  }
+
+  // ===== Floating score popups =====
+  // Used to show "+300" etc. when eating a ghost. Texts float up and fade.
+  const floatingTexts = [];
+  function addFloatingText(gridX, gridY, text, color) {
+    floatingTexts.push({ x: gridX, y: gridY, text, color: color || '#00FF84', age: 0, life: 0.9 });
+  }
+  function updateFloatingTexts(dt) {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      floatingTexts[i].age += dt;
+      if (floatingTexts[i].age >= floatingTexts[i].life) floatingTexts.splice(i, 1);
+    }
+  }
+  function drawFloatingTexts() {
+    if (floatingTexts.length === 0) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = "700 18px 'Press Start 2P', 'Courier New', monospace";
+    for (const ft of floatingTexts) {
+      const t = ft.age / ft.life;        // 0 → 1
+      const yOff = -t * 32;
+      const alpha = Math.max(0, 1 - t);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = ft.color;
+      ctx.shadowColor = ft.color;
+      ctx.shadowBlur = 8;
+      // Drop shadow + main text for pixel-pop feel
+      ctx.fillStyle = '#000';
+      ctx.shadowBlur = 0;
+      ctx.fillText(ft.text, ft.x * CELL + CELL / 2 + 2, ft.y * CELL + CELL / 2 + yOff + 2);
+      ctx.fillStyle = ft.color;
+      ctx.shadowColor = ft.color;
+      ctx.shadowBlur = 10;
+      ctx.fillText(ft.text, ft.x * CELL + CELL / 2, ft.y * CELL + CELL / 2 + yOff);
+    }
+    ctx.restore();
+  }
+
+  // ===== Helpers =====
+  const Dir = {
+    Up:    { x: 0, y: -1 },
+    Down:  { x: 0, y: 1 },
+    Left:  { x: -1, y: 0 },
+    Right: { x: 1, y: 0 },
+    None:  { x: 0, y: 0 }
+  };
+  const eqDir = (a, b) => a.x === b.x && a.y === b.y;
+  const revDir = d => ({ x: -d.x, y: -d.y });
+  const hasDir = d => d.x !== 0 || d.y !== 0;
+
+  function gridCell(gx, gy) {
+    gx = ((gx % COLS) + COLS) % COLS;
+    if (gy < 0 || gy >= ROWS) return 'void';
+    return grid[gy][gx];
+  }
+  function isWalkablePlayer(gx, gy) {
+    const c = gridCell(gx, gy);
+    return c === 'pellet' || c === 'power' || c === 'empty';
+  }
+  function isWalkableGhost(gx, gy, mode) {
+    const c = gridCell(gx, gy);
+    if (c === 'wall' || c === 'void') return false;
+    if (c === 'gate') return mode === 'exiting' || mode === 'eaten';
+    return true;
+  }
+  function aligned(e, inc) {
+    const tol = Math.max(inc * 0.55, 0.04);
+    return Math.abs(e.x - Math.round(e.x)) < tol && Math.abs(e.y - Math.round(e.y)) < tol;
+  }
+
+  // ===== BFS distance map (real maze distance, not Euclidean) =====
+  // Ghosts use this so they pick the correct direction at intersections
+  // instead of heading toward walls.
+  function bfsDistMap(tx, ty, mode) {
+    tx = ((tx % COLS) + COLS) % COLS;
+    if (ty < 0 || ty >= ROWS) return null;
+    // If target cell is itself blocked for this mode, walk back to nearest open cell
+    if (!isWalkableGhost(tx, ty, mode)) {
+      // Try neighbors
+      let found = false;
+      for (const d of [Dir.Up, Dir.Right, Dir.Down, Dir.Left]) {
+        const nx = ((tx + d.x) % COLS + COLS) % COLS;
+        const ny = ty + d.y;
+        if (ny >= 0 && ny < ROWS && isWalkableGhost(nx, ny, mode)) {
+          tx = nx; ty = ny; found = true; break;
+        }
+      }
+      if (!found) return null;
+    }
+    const dist = new Map();
+    const startKey = tx + ',' + ty;
+    dist.set(startKey, 0);
+    const queue = [[tx, ty]];
+    let head = 0;
+    while (head < queue.length) {
+      const [x, y] = queue[head++];
+      const d = dist.get(x + ',' + y);
+      for (const dir of [Dir.Up, Dir.Right, Dir.Down, Dir.Left]) {
+        const nx = ((x + dir.x) % COLS + COLS) % COLS;
+        const ny = y + dir.y;
+        if (ny < 0 || ny >= ROWS) continue;
+        if (!isWalkableGhost(nx, ny, mode)) continue;
+        const key = nx + ',' + ny;
+        if (dist.has(key)) continue;
+        dist.set(key, d + 1);
+        queue.push([nx, ny]);
+      }
+    }
+    return dist;
+  }
+
+  // ===== Game state =====
+  let player, ghosts;
+  let score, level, lives, pelletsLeft, highScore;
+  let frightenedTimer, frightenedMax, deathAnim, levelStartCountdown;
+  let started, ended;
+  let comboChain, comboTimer, comboBest;
+  let ghostsEatenInPower;
+
+  // Per-level ghost speed. Level 2 only marginally faster than level 1;
+  // the real jump is at level 3 (the dense maze).
+  function ghostBaseSpeed(lvl) {
+    if (lvl <= 1) return 4.4;
+    if (lvl === 2) return 5.0;
+    return 5.0 + (lvl - 2) * 0.45;
+  }
+  // Points awarded for each ghost eaten during a single hunter session.
+  const GHOST_EAT_POINTS = [300, 600, 1000, 1500, 2000];
+  function ghostEatBonus(n) {
+    return GHOST_EAT_POINTS[Math.min(n, GHOST_EAT_POINTS.length) - 1] || 2000;
+  }
+
+  const GHOST_CONFIGS = [
+    { spawn: { x: 12, y: 7 }, personality: 'chase',  corner: { x: COLS-2, y: 1 },     releaseDelay: 0,   colorIdx: 0 },
+    { spawn: { x: 11, y: 7 }, personality: 'ambush', corner: { x: 1,      y: 1 },     releaseDelay: 2,   colorIdx: 1 },
+    { spawn: { x: 13, y: 7 }, personality: 'flank',  corner: { x: COLS-2, y: ROWS-2 }, releaseDelay: 4,   colorIdx: 2 },
+    { spawn: { x: 10, y: 7 }, personality: 'random', corner: { x: 1,      y: ROWS-2 }, releaseDelay: 6,   colorIdx: 3 }
+  ];
+
+  function newGame() {
+    // Fresh game — wipe any saved state so it doesn't get re-loaded later.
+    if (typeof clearSave === 'function') clearSave();
+    stopAllMusic();
+    score = 0;
+    level = 1;
+    lives = 3;
+    parseMaze();
+    pelletsLeft = pelletTotal;
+    comboBest = 0;
+    resetPositions();
+    started = true;
+    ended = false;
+    startLevelMusic();
+  }
+  function newLevel() {
+    level++;
+    parseMaze();
+    pelletsLeft = pelletTotal;
+    resetPositions();
+    sndLevel();
+    startLevelMusic();
+  }
+  function resetPositions() {
+    player = {
+      x: playerStart.x, y: playerStart.y,
+      dir: { ...Dir.None }, reqDir: { ...Dir.None },
+      speed: 7.5,
+      mouth: 0
+    };
+    ghosts = GHOST_CONFIGS.map(cfg => ({
+      ...cfg,
+      x: cfg.spawn.x, y: cfg.spawn.y,
+      dir: { ...Dir.Up },
+      mode: 'in_house',
+      houseTimer: cfg.releaseDelay,
+      speed: ghostBaseSpeed(level),
+      bob: Math.random() * Math.PI * 2
+    }));
+    frightenedTimer = 0;
+    frightenedMax = 7;
+    deathAnim = 0;
+    levelStartCountdown = 0.6;
+    comboChain = 0;
+    comboTimer = 0;
+    ghostsEatenInPower = 0;
+  }
+
+  // ===== Input =====
+  function setReqDir(d) {
+    ensureAudio();
+    if (!started && !ended) maybeStart();
+    if (player) player.reqDir = { ...d };
+  }
+  window.addEventListener('keydown', (e) => {
+    // Don't hijack keys when the user is typing in an input (initials field).
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const k = e.key;
+    if (k === 'p' || k === 'P' || k === ' ' || k === 'Spacebar') {
+      if (started && !ended) { togglePause(); e.preventDefault(); }
+      return;
+    }
+    if (paused) return;
+    if (k === 'ArrowUp' || k === 'w' || k === 'W') setReqDir(Dir.Up);
+    else if (k === 'ArrowDown' || k === 's' || k === 'S') setReqDir(Dir.Down);
+    else if (k === 'ArrowLeft' || k === 'a' || k === 'A') setReqDir(Dir.Left);
+    else if (k === 'ArrowRight' || k === 'd' || k === 'D') setReqDir(Dir.Right);
+    else return;
+    e.preventDefault();
+  });
+  let touchStart = null;
+  canvas.addEventListener('touchstart', (e) => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    ensureAudio();
+  }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    if (!touchStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.x;
+    const dy = t.clientY - touchStart.y;
+    if (Math.abs(dx) < 16 && Math.abs(dy) < 16) { touchStart = null; return; }
+    if (Math.abs(dx) > Math.abs(dy)) setReqDir(dx > 0 ? Dir.Right : Dir.Left);
+    else setReqDir(dy > 0 ? Dir.Down : Dir.Up);
+    touchStart = null;
+  });
+
+  const scoreEl   = document.getElementById('score');
+  const livesEl   = document.getElementById('lives');
+  const levelEl   = document.getElementById('level');
+  const comboEl   = document.getElementById('combo');
+  const comboSub  = document.getElementById('comboSub');
+  const highEl    = document.getElementById('highScore');
+  const alarmSegs   = document.getElementById('alarmSegs');
+  const alarmEl     = document.getElementById('alarmEl');
+  const alarmStatus = document.getElementById('alarmStatus');
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay   = document.getElementById('endOverlay');
+  const startBtn  = document.getElementById('startBtn');
+  const readyBtn  = document.getElementById('readyBtn');
+  const restartBtn= document.getElementById('restartBtn');
+  const endTitle  = document.getElementById('endTitle');
+  const finalScore= document.getElementById('finalScore');
+  const endLevel  = document.getElementById('endLevel');
+  const bestChain = document.getElementById('bestChain');
+  const soundBtn  = document.getElementById('soundBtn');
+
+  const hudScore = document.getElementById('hudScore');
+  const hudLevel = document.getElementById('hudLevel');
+  const hudLives = document.getElementById('hudLives');
+  const hudPauseBtn = document.getElementById('hudPauseBtn');
+  if (hudPauseBtn) {
+    hudPauseBtn.addEventListener('click', () => {
+      if (!started || ended) maybeStart();
+      else togglePause();
+    });
+  }
+
+  const ALARM_SEG_COUNT = 12;
+  for (let i = 0; i < ALARM_SEG_COUNT; i++) {
+    const s = document.createElement('div');
+    s.className = 'alarm-seg';
+    alarmSegs.appendChild(s);
+  }
+
+  try { highScore = parseInt(localStorage.getItem('promptly_pacman_hs') || '0', 10) || 0; }
+  catch (e) { highScore = 0; }
+  function maybeUpdateHigh() {
+    if (score > highScore) {
+      highScore = score;
+      try { localStorage.setItem('promptly_pacman_hs', String(highScore)); } catch (e) {}
+    }
+  }
+
+  // ===== Highscore list (top 5) =====
+  const HS_KEY = 'promptly_pacman_hs_list';
+  const HS_LIMIT = 5;
+  function loadHighscores() {
+    try {
+      const raw = localStorage.getItem(HS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveHighscores(list) {
+    try { localStorage.setItem(HS_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function qualifiesForHighscore(s) {
+    if (s <= 0) return false;
+    const list = loadHighscores();
+    if (list.length < HS_LIMIT) return true;
+    return s > list[list.length - 1].score;
+  }
+  function addHighscore(name, s, lvl) {
+    const list = loadHighscores();
+    const entry = {
+      name: (name || '???').slice(0, 3).toUpperCase().padEnd(3, ' ').trim() || '???',
+      score: s,
+      level: lvl,
+      date: Date.now()
+    };
+    list.push(entry);
+    list.sort((a, b) => b.score - a.score);
+    while (list.length > HS_LIMIT) list.pop();
+    saveHighscores(list);
+    return list.indexOf(entry);
+  }
+  function renderHighscoreList(highlightIdx) {
+    const items = document.getElementById('highscoreItems');
+    if (!items) return;
+    const list = loadHighscores();
+    items.innerHTML = '';
+    for (let i = 0; i < HS_LIMIT; i++) {
+      const li = document.createElement('li');
+      const entry = list[i];
+      if (i === highlightIdx) li.classList.add('you');
+      if (!entry) li.classList.add('empty');
+      li.innerHTML = entry
+        ? `<span class="rank">${i + 1}</span><span class="name">${entry.name}</span><span class="score">${pad(entry.score, 6)}</span>`
+        : `<span class="rank">${i + 1}</span><span class="name">---</span><span class="score">------</span>`;
+      items.appendChild(li);
+    }
+  }
+  // Sync `highScore` with the list's top entry so the panel stays in sync.
+  (function syncHighFromList() {
+    const list = loadHighscores();
+    if (list.length && list[0].score > highScore) {
+      highScore = list[0].score;
+    }
+  })();
+
+  const highscoreEntry = document.getElementById('highscoreEntry');
+  const initialsInput  = document.getElementById('initialsInput');
+  const submitInitials = document.getElementById('submitInitials');
+
+  function showGameOverScreen() {
+    if (qualifiesForHighscore(score)) {
+      highscoreEntry.classList.remove('hidden');
+      initialsInput.value = '';
+      renderHighscoreList(-1);
+      endOverlay.classList.remove('hidden');
+      setTimeout(() => initialsInput.focus(), 50);
+    } else {
+      highscoreEntry.classList.add('hidden');
+      renderHighscoreList(-1);
+      endOverlay.classList.remove('hidden');
+    }
+  }
+  function commitHighscore() {
+    const name = (initialsInput.value || '').trim();
+    if (!name) { initialsInput.focus(); return; }
+    const idx = addHighscore(name, score, level);
+    highscoreEntry.classList.add('hidden');
+    renderHighscoreList(idx);
+  }
+  if (submitInitials) submitInitials.addEventListener('click', commitHighscore);
+  if (initialsInput) {
+    initialsInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+    initialsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commitHighscore(); }
+    });
+  }
+
+  // ===== Save / Load game =====
+  const SAVE_KEY = 'promptly_pacman_save';
+  const continueBtn = document.getElementById('continueBtn');
+  function hasSavedGame() {
+    try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
+  }
+  function clearSave() {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    if (continueBtn) continueBtn.classList.add('hidden');
+  }
+  function saveGame() {
+    if (!started || ended || !player || !ghosts) return;
+    if (deathAnim > 0) return; // don't save mid-death
+    try {
+      const state = {
+        score, level, lives, comboBest, pelletsLeft,
+        grid: grid.map(row => row.slice()),
+        player: {
+          x: player.x, y: player.y,
+          dir: { ...player.dir }, reqDir: { ...player.reqDir },
+          speed: player.speed, mouth: player.mouth
+        },
+        ghosts: ghosts.map(g => ({
+          x: g.x, y: g.y,
+          dir: { ...g.dir }, mode: g.mode,
+          personality: g.personality, colorIdx: g.colorIdx,
+          corner: { ...g.corner }, spawn: { ...g.spawn },
+          releaseDelay: g.releaseDelay, speed: g.speed,
+          houseTimer: g.houseTimer, bob: g.bob
+        })),
+        frightenedTimer, frightenedMax, ghostsEatenInPower,
+        version: 1
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      if (!s || !s.grid || !s.player || !s.ghosts) return false;
+      score = s.score || 0;
+      level = s.level || 1;
+      lives = s.lives != null ? s.lives : 3;
+      comboBest = s.comboBest || 0;
+      pelletsLeft = s.pelletsLeft || 0;
+      grid = s.grid;
+      player = s.player;
+      ghosts = s.ghosts;
+      frightenedTimer = s.frightenedTimer || 0;
+      frightenedMax = s.frightenedMax || 7;
+      ghostsEatenInPower = s.ghostsEatenInPower || 0;
+      deathAnim = 0;
+      levelStartCountdown = 0.4;
+      comboChain = 0;
+      comboTimer = 0;
+      started = true;
+      ended = false;
+      return true;
+    } catch (e) { return false; }
+  }
+  if (continueBtn) {
+    if (hasSavedGame()) continueBtn.classList.remove('hidden');
+    continueBtn.addEventListener('click', () => {
+      if (loadGame()) {
+        startOverlay.classList.add('hidden');
+        ensureAudio();
+        primeHunterAudio(); // iOS audio unlock
+        readyBtn.textContent = 'Spil';
+        readyBtn.classList.add('playing');
+        updateUI();
+        // Start the right music for the resumed state.
+        startLevelMusic();
+        if (frightenedTimer > 0) startHunterMusic();
+      }
+    });
+  }
+  let autoSaveAcc = 0;
+
+  function comboMultiplier() {
+    if (comboChain < 5) return 1;
+    if (comboChain < 15) return 1.5;
+    if (comboChain < 30) return 2;
+    if (comboChain < 50) return 2.5;
+    return 3;
+  }
+  function pad(n, len) { return String(n).padStart(len, '0'); }
+
+  function renderLives() {
+    livesEl.innerHTML = '';
+    for (let i = 0; i < Math.max(0, lives); i++) {
+      const img = document.createElement('img');
+      img.src = 'imgp/promptly%20toggle%20black.png';
+      img.alt = 'liv';
+      img.className = 'life';
+      livesEl.appendChild(img);
+    }
+  }
+  function updateUI() {
+    scoreEl.textContent = pad(score, 6);
+    highEl.textContent = pad(highScore, 6);
+    levelEl.textContent = pad(level, 2);
+    renderLives();
+    const mult = comboMultiplier();
+    if (comboChain >= 5) {
+      comboEl.textContent = `×${mult} · ${comboChain}`;
+      comboEl.classList.remove('idle');
+    } else {
+      comboEl.textContent = '×1';
+      comboEl.classList.add('idle');
+    }
+    comboSub.textContent = `Bedst: ${comboBest}`;
+    updateAlarm();
+    // Sync the ready-button label so its current action is obvious on touch.
+    let btnLabel = 'Klar?';
+    if (started && !ended) btnLabel = paused ? 'Fortsæt' : 'Pause';
+    if (readyBtn) {
+      if (readyBtn.textContent !== btnLabel) readyBtn.textContent = btnLabel;
+      readyBtn.classList.toggle('playing', started && !ended);
+    }
+    // Mobile HUD mirrors the same essentials.
+    if (hudScore) hudScore.textContent = pad(score, 6);
+    if (hudLevel) hudLevel.textContent = pad(level, 2);
+    if (hudLives) {
+      hudLives.innerHTML = '';
+      for (let i = 0; i < Math.max(0, lives); i++) {
+        const img = document.createElement('img');
+        img.src = 'imgp/promptly%20toggle%20black.png';
+        img.alt = '';
+        hudLives.appendChild(img);
+      }
+    }
+    if (hudPauseBtn && hudPauseBtn.textContent !== btnLabel) hudPauseBtn.textContent = btnLabel;
+  }
+
+  // === Spøgelsesalarm — JS-driven so we know it actually renders ===
+  // Two modes, both visualised by inline styles applied every frame:
+  //   - Hunter (power pellet active): green bar, BLINKS hard on/off, drains as timer runs out.
+  //   - Normal: proximity to nearest chase/exiting ghost. Cyan → yellow → red.
+  //     When red (danger), it blinks fast.
+  const ALARM_PALETTE = {
+    safe:   { bg: '#5AD0FF', glow: 'rgba(90, 208, 255, 0.7)', dim: 'rgba(90, 208, 255, 0.18)', text: '#5AD0FF', label: 'Sikker' },
+    on:     { bg: '#5AD0FF', glow: 'rgba(90, 208, 255, 0.8)', dim: 'rgba(90, 208, 255, 0.18)', text: '#5AD0FF', label: 'Tæt på' },
+    warn:   { bg: '#ffd24a', glow: 'rgba(255, 210, 74, 0.9)', dim: 'rgba(255, 210, 74, 0.20)', text: '#ffd24a', label: 'Pas på' },
+    danger: { bg: '#ff4a4a', glow: 'rgba(255, 74, 74, 1)',    dim: 'rgba(255, 74, 74, 0.20)',  text: '#ff4a4a', label: 'Fare!' },
+    hunter: { bg: '#00FF84', glow: 'rgba(0, 255, 132, 1)',    dim: 'rgba(0, 255, 132, 0.18)',  text: '#00FF84', label: 'Jæger' }
+  };
+  const alarmCard = alarmEl.closest('.card');
+  function updateAlarm() {
+    let pct = 0;
+    let state = 'safe';
+
+    if (frightenedTimer > 0 && started && !ended) {
+      pct = Math.max(0, frightenedTimer / Math.max(frightenedMax, 0.001));
+      state = 'hunter';
+    } else if (started && !ended && player && ghosts) {
+      let nearest = Infinity;
+      for (const g of ghosts) {
+        if (g.mode !== 'chase' && g.mode !== 'exiting') continue;
+        let dx = Math.abs(g.x - player.x);
+        if (dx > COLS / 2) dx = COLS - dx;
+        const dy = g.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < nearest) nearest = dist;
+      }
+      // Tighter range, linear falloff. Most of the map should sit at "safe".
+      const MAX_RANGE = 8;
+      if (nearest < MAX_RANGE) pct = 1 - nearest / MAX_RANGE;
+      if (pct > 0.7)       state = 'danger';
+      else if (pct > 0.4)  state = 'warn';
+      else if (pct > 0.1)  state = 'on';
+      else                 state = 'safe';
+    }
+
+    // ONLY hunter mode blinks. Proximity states are static colours.
+    const blinkOn = (state === 'hunter')
+      ? (Math.floor(performance.now() / 220) % 2 === 0)
+      : true;
+
+    const c = ALARM_PALETTE[state];
+    const filled = Math.max(0, Math.round(pct * ALARM_SEG_COUNT));
+    const segs = alarmSegs.children;
+    for (let i = 0; i < segs.length; i++) {
+      const on = i < filled;
+      if (on) {
+        segs[i].style.background = blinkOn ? c.bg : c.dim;
+        segs[i].style.boxShadow  = blinkOn ? `0 0 6px ${c.glow}` : 'none';
+      } else {
+        segs[i].style.background = 'rgba(90, 208, 255, 0.10)';
+        segs[i].style.boxShadow  = 'none';
+      }
+    }
+
+    const iconPath = alarmEl.querySelector('.alarm-icon path');
+    if (iconPath) iconPath.style.fill = blinkOn ? c.text : 'rgba(255, 255, 255, 0.18)';
+
+    alarmStatus.textContent = c.label;
+    alarmStatus.style.color = c.text;
+    alarmStatus.style.opacity = (state === 'safe') ? 0.7
+      : (state === 'hunter') ? (blinkOn ? 1 : 0.3)
+      : 1;
+
+    // Card-level flash — ONLY for hunter mode. Proximity states leave the card alone.
+    if (alarmCard) {
+      if (state === 'hunter') {
+        alarmCard.style.borderColor = blinkOn ? c.text : 'rgba(255,255,255,0.08)';
+        alarmCard.style.boxShadow   = blinkOn ? `0 0 16px ${c.glow}, inset 0 0 12px ${c.glow}` : 'none';
+        alarmCard.style.background  = blinkOn ? `${c.bg}1a` : 'rgba(90, 208, 255, 0.04)';
+      } else {
+        alarmCard.style.borderColor = '';
+        alarmCard.style.boxShadow   = '';
+        alarmCard.style.background  = '';
+      }
+    }
+  }
+
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? '♪' : '✕';
+    soundBtn.classList.toggle('off', !soundOn);
+    if (soundOn) {
+      ensureAudio();
+      // Resume whichever track should be playing right now.
+      if (started && !ended && !paused) {
+        if (frightenedTimer > 0) resumeHunterMusic();
+        else resumeLevelMusic();
+      }
+    } else {
+      pauseHunterMusic();
+      pauseLevelMusic();
+    }
+  });
+  function maybeStart() {
+    if (started && !ended) return;
+    startOverlay.classList.add('hidden');
+    ensureAudio();
+    primeHunterAudio(); // unlock for iOS — must run during this click gesture
+    sndStart();
+    newGame();
+    readyBtn.textContent = 'Spil';
+    readyBtn.classList.add('playing');
+    updateUI();
+  }
+  startBtn.addEventListener('click', maybeStart);
+  // The ready button doubles as pause/play once a game is running — this is
+  // the touch-friendly way to pause on mobile (where there's no keyboard).
+  readyBtn.addEventListener('click', () => {
+    if (!started || ended) maybeStart();
+    else togglePause();
+  });
+  restartBtn.addEventListener('click', () => {
+    endOverlay.classList.add('hidden');
+    newGame();
+    updateUI();
+  });
+
+  function bumpCombo() {
+    comboChain++;
+    comboTimer = 0.9;
+    if (comboChain > comboBest) comboBest = comboChain;
+    // Multiplier tier transitions — escalating reward sound + floating text
+    if (comboChain === 5)       { sndComboTier(1); if (player) addFloatingText(player.x, player.y, '×1.5', '#5AD0FF'); }
+    else if (comboChain === 15) { sndComboTier(2); if (player) addFloatingText(player.x, player.y, '×2',   '#ffd24a'); }
+    else if (comboChain === 30) { sndComboTier(3); if (player) addFloatingText(player.x, player.y, '×2.5', '#ff8a4a'); }
+    else if (comboChain === 50) { sndComboTier(4); if (player) addFloatingText(player.x, player.y, '×3 ★', '#ff4a4a'); }
+  }
+  function breakCombo() { if (comboChain > 0) { comboChain = 0; comboTimer = 0; } }
+
+  // ===== Player =====
+  function updatePlayer(dt) {
+    const ds = player.speed * dt;
+    if (aligned(player, ds)) {
+      player.x = Math.round(player.x);
+      player.y = Math.round(player.y);
+      if (hasDir(player.reqDir)) {
+        const nx = player.x + player.reqDir.x;
+        const ny = player.y + player.reqDir.y;
+        if (isWalkablePlayer(nx, ny)) player.dir = { ...player.reqDir };
+      }
+      if (hasDir(player.dir)) {
+        const cx = player.x + player.dir.x;
+        const cy = player.y + player.dir.y;
+        if (!isWalkablePlayer(cx, cy)) player.dir = { ...Dir.None };
+      }
+    }
+    player.x += player.dir.x * ds;
+    player.y += player.dir.y * ds;
+    if (player.x < -0.5) player.x += COLS;
+    if (player.x > COLS - 0.5) player.x -= COLS;
+    if (hasDir(player.dir)) player.mouth = (player.mouth + dt * 14) % (Math.PI * 2);
+    const tx = Math.round(player.x);
+    const ty = Math.round(player.y);
+    if (Math.abs(player.x - tx) < 0.4 && Math.abs(player.y - ty) < 0.4 && ty >= 0 && ty < ROWS) {
+      const c = grid[ty][tx];
+      if (c === 'pellet') {
+        grid[ty][tx] = 'empty';
+        pelletsLeft--;
+        bumpCombo();
+        const mult = comboMultiplier();
+        score += Math.round(10 * mult);
+        maybeUpdateHigh();
+        sndMunch();
+      } else if (c === 'power') {
+        grid[ty][tx] = 'empty';
+        pelletsLeft--;
+        bumpCombo();
+        const mult = comboMultiplier();
+        score += Math.round(50 * mult);
+        maybeUpdateHigh();
+        frightenedMax = Math.max(7 - (level - 1) * 0.5, 3);
+        frightenedTimer = frightenedMax;
+        ghostsEatenInPower = 0;
+        ghosts.forEach(g => {
+          if (g.mode === 'chase') {
+            g.mode = 'frightened';
+            g.dir = revDir(g.dir);
+          }
+        });
+        sndPower();
+        startHunterMusic();
+      }
+    }
+  }
+
+  // ===== Ghost =====
+  function ghostChaseTarget(g) {
+    switch (g.personality) {
+      case 'chase': return { x: player.x, y: player.y };
+      case 'ambush': return { x: player.x + player.dir.x * 4, y: player.y + player.dir.y * 4 };
+      case 'flank': {
+        const ahead = { x: player.x + player.dir.x * 2, y: player.y + player.dir.y * 2 };
+        const r = ghosts[0];
+        return { x: 2 * ahead.x - r.x, y: 2 * ahead.y - r.y };
+      }
+      case 'random': {
+        const d = Math.hypot(g.x - player.x, g.y - player.y);
+        return d > 8 ? { x: player.x, y: player.y } : g.corner;
+      }
+    }
+    return { x: player.x, y: player.y };
+  }
+
+  function updateGhost(g, dt) {
+    if (g.mode === 'in_house') {
+      g.houseTimer -= dt;
+      g.bob = (g.bob + dt * 3) % (Math.PI * 2);
+      if (g.houseTimer <= 0) { g.mode = 'exiting'; g.dir = { ...Dir.Up }; }
+      return;
+    }
+    let speed = g.speed;
+    if (g.mode === 'frightened') speed *= 0.7;
+    else if (g.mode === 'eaten') speed *= 1.8;
+    else if (g.mode === 'exiting') speed *= 1.3;
+    const ds = speed * dt;
+    if (aligned(g, ds)) {
+      g.x = Math.round(g.x);
+      g.y = Math.round(g.y);
+      if (g.mode === 'eaten' && g.x === HOUSE_CENTER.x && g.y === HOUSE_CENTER.y) {
+        g.mode = 'in_house'; g.houseTimer = 1.0; g.dir = { ...Dir.Up };
+        g.speed = ghostBaseSpeed(level);
+        return;
+      }
+      if (g.mode === 'exiting' && g.x === HOUSE_EXIT.x && g.y === HOUSE_EXIT.y) {
+        // If a power-pellet is active when this ghost finally exits the house,
+        // it must become frightened (eatable) instead of immediately chasing,
+        // otherwise it can kill the player mid-hunter-mode.
+        if (frightenedTimer > 0) { g.mode = 'frightened'; g.dir = { ...Dir.Left }; }
+        else                     { g.mode = 'chase';      g.dir = { ...Dir.Left }; }
+      }
+      const back = revDir(g.dir);
+      const allowReverse = g.mode === 'eaten' || g.mode === 'exiting';
+      const options = [];
+      for (const d of [Dir.Up, Dir.Right, Dir.Down, Dir.Left]) {
+        if (!allowReverse && eqDir(d, back)) continue;
+        const nx = g.x + d.x, ny = g.y + d.y;
+        if (isWalkableGhost(nx, ny, g.mode)) options.push({ d, nx, ny });
+      }
+      if (options.length === 0) g.dir = back;
+      else if (options.length === 1) g.dir = { ...options[0].d };
+      else {
+        if (g.mode === 'frightened') {
+          g.dir = { ...options[Math.floor(Math.random() * options.length)].d };
+        } else {
+          let target;
+          if (g.mode === 'eaten')        target = HOUSE_CENTER;
+          else if (g.mode === 'exiting') target = HOUSE_EXIT;
+          else                           target = ghostChaseTarget(g);
+          // Use BFS distance instead of Euclidean — ghosts no longer pick
+          // a direction that's geometrically closer but walled off.
+          const tx = Math.round(target.x), ty = Math.round(target.y);
+          const distMap = bfsDistMap(tx, ty, g.mode);
+          let best = options[0], bestDist = Infinity;
+          for (const opt of options) {
+            let d;
+            if (distMap) {
+              const key = opt.nx + ',' + opt.ny;
+              d = distMap.has(key) ? distMap.get(key) : 9999;
+            } else {
+              const dx = opt.nx - tx, dy = opt.ny - ty;
+              d = dx * dx + dy * dy;
+            }
+            if (d < bestDist) { bestDist = d; best = opt; }
+          }
+          g.dir = { ...best.d };
+        }
+      }
+    }
+    g.x += g.dir.x * ds;
+    g.y += g.dir.y * ds;
+    if (g.mode !== 'in_house' && g.mode !== 'exiting') {
+      if (g.x < -0.5) g.x += COLS;
+      if (g.x > COLS - 0.5) g.x -= COLS;
+    }
+  }
+
+  function checkCollisions() {
+    for (const g of ghosts) {
+      if (g.mode === 'in_house' || g.mode === 'exiting' || g.mode === 'eaten') continue;
+      const dist = Math.hypot(g.x - player.x, g.y - player.y);
+      if (dist < 0.7) {
+        if (g.mode === 'frightened') {
+          g.mode = 'eaten';
+          ghostsEatenInPower++;
+          const bonus = ghostEatBonus(ghostsEatenInPower);
+          score += bonus;
+          maybeUpdateHigh();
+          sndGhostEat();
+          addFloatingText(g.x, g.y, '+' + bonus, '#00FF84');
+        } else if (g.mode === 'chase') { die(); return; }
+      }
+    }
+  }
+  function die() {
+    sndDeath();
+    deathAnim = 1.4;
+    lives--;
+    breakCombo();
+    stopHunterMusic();
+    pauseLevelMusic();
+  }
+
+  // ===== Drawing =====
+  function drawWalls() {
+    ctx.save();
+    ctx.strokeStyle = C.wall;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = C.wall;
+    ctx.shadowBlur = 6;
+    const inset = 7;
+    const open = (xx, yy) => {
+      const c = gridCell(xx, yy);
+      return c !== 'wall' && c !== 'void';
+    };
+    ctx.beginPath();
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (grid[y][x] !== 'wall') continue;
+        const px = x * CELL, py = y * CELL;
+        const N = open(x, y - 1), S = open(x, y + 1), Wl = open(x - 1, y), Eg = open(x + 1, y);
+        if (N) { ctx.moveTo(px, py + inset); ctx.lineTo(px + CELL, py + inset); }
+        if (S) { ctx.moveTo(px, py + CELL - inset); ctx.lineTo(px + CELL, py + CELL - inset); }
+        if (Wl) { ctx.moveTo(px + inset, py); ctx.lineTo(px + inset, py + CELL); }
+        if (Eg) { ctx.moveTo(px + CELL - inset, py); ctx.lineTo(px + CELL - inset, py + CELL); }
+      }
+    }
+    ctx.stroke();
+    ctx.strokeStyle = C.gate;
+    ctx.shadowColor = C.gate;
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (grid[y][x] === 'gate') {
+          const px = x * CELL, py = y * CELL;
+          ctx.moveTo(px + 5, py + CELL / 2);
+          ctx.lineTo(px + CELL - 5, py + CELL / 2);
+        }
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPellets() {
+    const t = performance.now() / 220;
+    const pulse = 1 + Math.sin(t) * 0.18;
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const c = grid[y][x];
+        const cx = x * CELL + CELL / 2, cy = y * CELL + CELL / 2;
+        if (c === 'pellet') {
+          ctx.fillStyle = C.pellet;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (c === 'power') {
+          ctx.save();
+          ctx.shadowColor = C.power;
+          ctx.shadowBlur = 16;
+          ctx.fillStyle = C.power;
+          ctx.beginPath();
+          ctx.arc(cx, cy, 7 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  function drawPlayer() {
+    const px = player.x * CELL + CELL / 2;
+    const py = player.y * CELL + CELL / 2;
+    const r = CELL / 2 - 2;
+    if (deathAnim > 0) {
+      const t = 1 - deathAnim / 1.4;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.fillStyle = C.player;
+      ctx.shadowColor = C.player;
+      ctx.shadowBlur = 20;
+      ctx.beginPath();
+      ctx.arc(px, py, r * Math.max(0, 1 - t), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    ctx.save();
+    ctx.fillStyle = C.player;
+    ctx.shadowColor = C.player;
+    ctx.shadowBlur = 16;
+    const moving = hasDir(player.dir);
+    let angle = 0;
+    if (player.dir.x === 1) angle = 0;
+    else if (player.dir.y === 1) angle = Math.PI / 2;
+    else if (player.dir.x === -1) angle = Math.PI;
+    else if (player.dir.y === -1) angle = -Math.PI / 2;
+    const mouth = moving ? (Math.sin(player.mouth) + 1) / 2 * 0.55 : 0.04;
+    ctx.beginPath();
+    if (mouth < 0.02) ctx.arc(px, py, r, 0, Math.PI * 2);
+    else {
+      ctx.moveTo(px, py);
+      ctx.arc(px, py, r, angle + mouth, angle - mouth + Math.PI * 2);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGhost(g) {
+    let bobY = 0;
+    if (g.mode === 'in_house') bobY = Math.sin(g.bob) * 2.5;
+    const px = g.x * CELL + CELL / 2;
+    const py = g.y * CELL + CELL / 2 + bobY;
+    const r = CELL / 2 - 3;
+    ctx.save();
+    let bodyColor = C.ghosts[g.colorIdx];
+    let glow = bodyColor;
+    let pupilColor = C.pupil;
+    let showBody = true;
+    if (g.mode === 'frightened') {
+      const blink = frightenedTimer < 2.2 && Math.floor(frightenedTimer * 6) % 2 === 0;
+      bodyColor = blink ? C.ghostFrightenedBlink : C.ghostFrightened;
+      glow = C.ghostFrightened;
+      pupilColor = C.bg;
+    } else if (g.mode === 'eaten') {
+      showBody = false;
+    }
+    if (showBody) {
+      ctx.fillStyle = bodyColor;
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.arc(px, py - 1, r, Math.PI, 0);
+      ctx.lineTo(px + r, py + r - 1);
+      const bumps = 4;
+      const bumpW = (r * 2) / bumps;
+      for (let i = 0; i < bumps; i++) {
+        const startX = px + r - i * bumpW;
+        const endX = startX - bumpW;
+        const dipY = py + r - 1 - (i % 2 === 0 ? bumpW * 0.55 : 0);
+        ctx.quadraticCurveTo((startX + endX) / 2, dipY, endX, py + r - 1);
+      }
+      ctx.lineTo(px - r, py - 1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    const eyeOffX = r * 0.38;
+    const eyeOffY = -r * 0.1;
+    const eyeR = r * 0.3;
+    const pupilR = eyeR * 0.55;
+    const pOff = eyeR * 0.42;
+    ctx.fillStyle = C.eye;
+    ctx.beginPath();
+    ctx.arc(px - eyeOffX, py + eyeOffY, eyeR, 0, Math.PI * 2);
+    ctx.arc(px + eyeOffX, py + eyeOffY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = pupilColor;
+    let pdx = g.dir.x * pOff, pdy = g.dir.y * pOff;
+    if (g.mode === 'in_house') { pdx = 0; pdy = 0; }
+    ctx.beginPath();
+    ctx.arc(px - eyeOffX + pdx, py + eyeOffY + pdy, pupilR, 0, Math.PI * 2);
+    ctx.arc(px + eyeOffX + pdx, py + eyeOffY + pdy, pupilR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawCenterText(text, color, sub) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.font = 'bold 34px -apple-system, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, W / 2, H / 2 - 0.8 * CELL);
+    if (sub) {
+      ctx.font = '600 16px -apple-system, system-ui, sans-serif';
+      ctx.fillStyle = '#E8E0D4';
+      ctx.shadowBlur = 6;
+      ctx.fillText(sub, W / 2, H / 2 - 0.8 * CELL + 32);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+    drawWalls();
+    drawPellets();
+    if (deathAnim <= 0) ghosts.forEach(drawGhost);
+    drawPlayer();
+    drawFloatingTexts();
+    if (started && !ended && levelStartCountdown > 0) {
+      drawCenterText(`NIVEAU ${level}`, C.levelText, 'Klar');
+    }
+    if (paused) drawPauseBox();
+  }
+
+  function drawPauseBox() {
+    const boxW = 520, boxH = 200;
+    const x = Math.round((W - boxW) / 2);
+    const y = Math.round((H - boxH) / 2);
+    ctx.save();
+    // Solid black panel
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x, y, boxW, boxH);
+    // Thick promptly-green border with glow
+    ctx.shadowColor = C.gate;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = C.gate;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(x, y, boxW, boxH);
+    // Pixel-inset inner border
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 8, y + 8, boxW - 16, boxH - 16);
+    // "PAUSE" title
+    ctx.fillStyle = C.gate;
+    ctx.shadowColor = C.gate;
+    ctx.shadowBlur = 14;
+    ctx.font = "bold 40px 'Press Start 2P', 'Courier New', monospace";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSE', W / 2, y + 76);
+    // Subtext
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = '#E8E0D4';
+    ctx.font = "400 13px 'Press Start 2P', 'Courier New', monospace";
+    ctx.fillText('Tryk P for at fortsætte', W / 2, y + 140);
+    ctx.restore();
+  }
+
+  // ===== Loop =====
+  level = 1; lives = 3; score = 0; comboBest = 0;
+  parseMaze();
+  pelletsLeft = pelletTotal;
+  resetPositions();
+  started = false; ended = false;
+  // Music files are loaded lazily — level music when a level starts,
+  // hunter music the first time a power pellet is eaten.
+  updateUI();
+
+  function togglePause() {
+    if (!started || ended) return;
+    paused = !paused;
+    if (paused) {
+      pauseHunterMusic();
+      pauseLevelMusic();
+    } else {
+      if (frightenedTimer > 0) resumeHunterMusic();
+      else resumeLevelMusic();
+    }
+  }
+
+  function step(dt) {
+    if (!started || ended || paused) return;
+    // Floating texts age even during countdown so they fade out cleanly.
+    updateFloatingTexts(dt);
+    if (levelStartCountdown > 0) { levelStartCountdown -= dt; return; }
+    if (deathAnim > 0) {
+      deathAnim -= dt;
+      if (deathAnim <= 0) {
+        if (lives <= 0) {
+          ended = true;
+          stopAllMusic();
+          clearSave();
+          endTitle.textContent = 'Game Over';
+          finalScore.textContent = pad(score, 6);
+          endLevel.textContent = level;
+          bestChain.textContent = comboBest;
+          showGameOverScreen();
+        } else { resetPositions(); resumeLevelMusic(); }
+      }
+      return;
+    }
+    updatePlayer(dt);
+    for (const g of ghosts) updateGhost(g, dt);
+    // Check collisions BEFORE the frightened timer expires, so that the very
+    // last frame of hunter mode still treats overlapping ghosts as eatable.
+    checkCollisions();
+    if (frightenedTimer > 0) {
+      frightenedTimer -= dt;
+      if (frightenedTimer <= 0) {
+        ghosts.forEach(g => { if (g.mode === 'frightened') g.mode = 'chase'; });
+        ghostsEatenInPower = 0;
+        stopHunterMusic();
+        resumeLevelMusic();
+      }
+    }
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) breakCombo();
+    }
+    if (pelletsLeft <= 0) newLevel();
+
+    // Auto-save every 2 seconds during active gameplay.
+    autoSaveAcc += dt;
+    if (autoSaveAcc >= 2) { autoSaveAcc = 0; saveGame(); }
+  }
+
+  const FIXED_DT = 1 / 60, MAX_FRAME = 0.1;
+  let lastTime = performance.now(), accumulator = 0;
+  function loop(now) {
+    let ft = (now - lastTime) / 1000;
+    lastTime = now;
+    if (ft > MAX_FRAME) ft = MAX_FRAME;
+    accumulator += ft;
+    while (accumulator >= FIXED_DT) { step(FIXED_DT); accumulator -= FIXED_DT; }
+    updateUI();
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  const MOBILE_HUD_RESERVE = 32;
+  function fitScale() {
+    const c = document.getElementById('container');
+    const canvasEl = document.getElementById('game');
+    if (!c || !canvasEl) return;
+    const mobileLandscape = window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
+    if (mobileLandscape) {
+      c.style.transform = '';
+      // Explicitly compute canvas display size so it always fits the viewport
+      // (works around mobile Safari quirks with aspect-ratio + dynamic vh).
+      const aspect = W / H;                 // 900 / 540 ≈ 1.667
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const availH = Math.max(0, vh - MOBILE_HUD_RESERVE);
+      let displayH = availH;
+      let displayW = displayH * aspect;
+      if (displayW > vw) {
+        displayW = vw;
+        displayH = displayW / aspect;
+      }
+      canvasEl.style.width = displayW + 'px';
+      canvasEl.style.height = displayH + 'px';
+    } else {
+      canvasEl.style.width = '';
+      canvasEl.style.height = '';
+      const margin = 12;
+      const sx = (window.innerWidth - margin) / 1280;
+      const sy = (window.innerHeight - margin) / 720;
+      const s = Math.min(sx, sy, 1);
+      c.style.transform = `scale(${s})`;
+    }
+  }
+  window.addEventListener('resize', fitScale);
+  // iOS sometimes reports stale dimensions on the orientationchange event itself;
+  // run again after the layout settles.
+  window.addEventListener('orientationchange', () => {
+    fitScale();
+    setTimeout(fitScale, 200);
+  });
+  fitScale();
+})();
+</script>
+</body>
+</html>
