@@ -187,22 +187,66 @@
     gap: 9px;
     min-width: 0;
   }
-  .logo {
+  /* "PROMPTMAN" pixel-art title — amiga style with chunky multi-layer shadow. */
+  .promptman-title {
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-weight: 400;
+    font-size: clamp(42px, 7vw, 68px);
+    color: var(--green);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    margin: 0;
+    text-align: center;
+    text-shadow:
+      -3px 0 0 #006837,
+      3px 0 0 #006837,
+      0 -3px 0 #006837,
+      0 3px 0 #006837,
+      6px 6px 0 #000,
+      0 0 30px rgba(0, 255, 132, 0.5);
+  }
+  .promptman-title.small {
+    font-size: 22px;
+    text-align: left;
+    text-shadow:
+      -2px 0 0 #006837,
+      2px 0 0 #006837,
+      0 -2px 0 #006837,
+      0 2px 0 #006837,
+      3px 3px 0 #000,
+      0 0 14px rgba(0, 255, 132, 0.4);
     margin-bottom: 6px;
+  }
+
+  /* Small "by promptly" credit tag — replaces standalone logo. */
+  .publisher-tag {
     display: inline-flex;
     align-items: center;
+    gap: 6px;
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    font-size: 9px;
+    color: var(--cyan);
+    opacity: 0.75;
     line-height: 1;
     user-select: none;
-    align-self: flex-start;
   }
-  .logo img {
-    height: 42px;
+  .publisher-tag img {
+    height: 18px;
     width: auto;
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    /* Invert dark navy → light, hue-rotate restores the green dot */
-    filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(0, 255, 132, 0.25));
+    filter: invert(1) hue-rotate(180deg);
+  }
+
+  /* Group game-title block in the side panel. */
+  .game-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 6px;
+    align-items: flex-start;
   }
 
   .card {
@@ -394,17 +438,15 @@
     -webkit-backdrop-filter: blur(8px);
   }
   .overlay .brand {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    margin-bottom: 20px;
+    gap: 14px;
+    margin-bottom: 18px;
     line-height: 1;
   }
-  .overlay .brand img {
-    height: 64px;
-    width: auto;
-    display: block;
-    image-rendering: pixelated;
-    filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 10px rgba(0, 255, 132, 0.3));
+  .overlay .brand .promptman-title {
+    font-size: clamp(44px, 8vw, 76px);
   }
   .overlay h1 {
     font-family: 'Press Start 2P', 'Courier New', monospace;
@@ -573,7 +615,10 @@
       </div>
 
       <aside class="panel">
-        <div class="logo"><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+        <div class="game-title">
+          <h2 class="promptman-title small">PROMPTMAN</h2>
+          <div class="publisher-tag"><span>by</span><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+        </div>
         <div class="card">
           <div class="card-label">Score</div>
           <div class="card-sub">1UP</div>
@@ -630,7 +675,10 @@
   </div>
 
   <div class="overlay" id="startOverlay">
-    <div class="brand"><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+    <div class="brand">
+      <h1 class="promptman-title">PROMPTMAN</h1>
+      <div class="publisher-tag"><span>by</span><img src="imgp/promptly%20amiga.webp" alt="promptly"></div>
+    </div>
     <p>Spis alle prikker. Undgå spøgelserne.</p>
     <p class="hint">Piletaster · WASD · swipe — kæde for bonus</p>
     <div class="btn-row">
