@@ -219,26 +219,29 @@
     margin-bottom: 6px;
   }
 
-  /* Small "by promptly" credit tag — replaces standalone logo. */
+  /* "by promptly" credit tag. */
   .publisher-tag {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     font-family: 'Press Start 2P', 'Courier New', monospace;
-    font-size: 9px;
+    font-size: 11px;
     color: var(--cyan);
-    opacity: 0.75;
+    opacity: 0.85;
     line-height: 1;
     user-select: none;
   }
   .publisher-tag img {
-    height: 18px;
+    height: 54px;
     width: auto;
     display: block;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    filter: invert(1) hue-rotate(180deg);
+    filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(0, 255, 132, 0.25));
   }
+  /* Smaller variant for side panel where vertical space is tight. */
+  .panel .publisher-tag img { height: 36px; }
+  .panel .publisher-tag { font-size: 10px; }
 
   /* Group game-title block in the side panel. */
   .game-title {
